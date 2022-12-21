@@ -1,99 +1,89 @@
 #include "shell.h"
+
 /**
- * sighand - function to handle ctrl+c
- * @signum: signal number
+ * sig_handler - checks if Ctrl C is pressed
+ * @sig_num: int
  */
-void sighand(int signum)
+void sig_handler(int sig_num)
 {
-	(void)signum;
-	write(1, "\n$ ", 3);
+	if (sig_num == SIGINT)
+	{
+		_puts("\n#cisfun$ ");
+	}
+}
+
+/**
+* _EOF - handles the End of File
+* @len: return value of getline function
+* @buff: buffer
+ */
+void _EOF(int len, char *buff)
+{
+	(void)buff;
+	if (len == -1)
+	{
+		if (isatty(STDIN_FILENO))
+		{
+			_puts("\n");
+			free(buff);
+		}
+		exit(0);
+	}
 }
 /**
- * main - simple shell program
- * Return: 0 always success
+  * _isatty - verif if terminal
+  */
+
+void _isatty(void)
+{
+	if (isatty(STDIN_FILENO))
+		_puts("#cisfun$ ");
+}
+/**
+ * main - Shell
+ * Return: 0 on success
  */
+
 int main(void)
 {
-	/*unsigned int pid, ppid;*/
-	ssize_t read = 0;
-	char *buff = NULL, **arr;
+	ssize_t len = 0;
+	char *buff = NULL, *value, *pathname, **arv;
 	size_t size = 0;
-	int result, tok_size = 0, len = 0, line_counter = 0;
-	int ex_flag = 0;
+	list_path *head = '\0';
+	void (*f)(char **);
 
-	while (1)
+	signal(SIGINT, sig_handler);
+	while (len != EOF)
 	{
-		size = 0;
-		buff = NULL;
-
-		if (isatty(0))
-			write(STDIN_FILENO, "$ ", 2);
-		signal(SIGINT, sighand);
-		read = getline(&buff, &size, stdin);
-		line_counter++;
-		if (read == -1)
+		_isatty();
+		len = getline(&buff, &size, stdin);
+		_EOF(len, buff);
+		arv = splitstring(buff, " \n");
+		if (!arv || !arv[0])
+			execute(arv);
+		else
 		{
-			if (isatty(0))
-				write(STDIN_FILENO, "\n", 1);
-			free(buff);
-			return (0);
-		}
-		if (read == 0)
-		{
-			if (isatty(0))
+			value = _getenv("PATH");
+			head = linkpath(value);
+			pathname = _which(arv[0], head);
+			f = checkbuild(arv);
+			if (f)
 			{
-				write(STDIN_FILENO, "\n", 1);
-				continue;
-			}
-		}
-		if (buff && buff[0] != '\n')
-		{
-			/* count length of buffer input */
-			len = _strlen(buff);
-			if (buff[len - 1] == '\n')
-				buff[len - 1] = '\0';
-
-			/* count number of tokens in buffer */
-			tok_size = toksize(buff);
-			if (tok_size == -1)
-				break;
-			if (tok_size == 0)
-				continue;
-			/* put tokens inside array */
-			arr = tokenize(buff);
-			/* checks if 'env', 'exit', or '.' is entered */
-			result = str_comp(arr, tok_size);
-			if (result == 0)
-			{
-				free(arr);
 				free(buff);
-				exit(ex_flag);
+				f(arv);
 			}
-			ex_flag = 0;
-			if (result == 2)
+			else if (!pathname)
+				execute(arv);
+			else if (pathname)
 			{
-				free(arr);
-				free(buff);
-				continue;
+				free(arv[0]);
+				arv[0] = pathname;
+				execute(arv);
 			}
-			else if (result == 1)
-			{
-				print_env();
-				free(arr);
-				free(buff);
-				continue;
-			}
-			/* send input to path function to check */
-			/*if it exists, permissions, and if it can execute */
-			ex_flag = path(arr, line_counter);
 		}
-		if (buff && buff[0] == '\n')
-		{
-			free(buff);
-			continue;
-		}
-		free(buff);
-		free(arr);
 	}
+	free_list(head);
+	freearv(arv);
+	free(buff);
 	return (0);
 }
